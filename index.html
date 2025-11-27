@@ -170,13 +170,17 @@
 
     function randomSpawnPosition() {
       const side = Math.floor(Math.random() * 4);
-      const padding = 80;
+      const margin = 80;
       const { width: w, height: h } = viewport;
+
+      const clampedX = () => Math.min(Math.max(margin, Math.random() * w), w - margin);
+      const clampedY = () => Math.min(Math.max(margin, Math.random() * h), h - margin);
+
       switch (side) {
-        case 0: return { x: -padding, y: Math.random() * h }; // left
-        case 1: return { x: w + padding, y: Math.random() * h }; // right
-        case 2: return { x: Math.random() * w, y: -padding }; // top
-        default: return { x: Math.random() * w, y: h + padding }; // bottom
+        case 0: return { x: margin, y: clampedY() }; // left edge, inside view
+        case 1: return { x: w - margin, y: clampedY() }; // right edge, inside view
+        case 2: return { x: clampedX(), y: margin }; // top edge, inside view
+        default: return { x: clampedX(), y: h - margin }; // bottom edge, inside view
       }
     }
 
