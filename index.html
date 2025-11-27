@@ -202,8 +202,9 @@
       scene.appendChild(element);
 
       const body = Bodies.rectangle(position.x, position.y, size, size, {
-        restitution: 0.6,
-        friction: 0.02,
+        restitution: 0.72,
+        friction: 0.005,
+        frictionStatic: 0.001,
         frictionAir: 0.012,
         chamfer: 4,
         label: 'checkbox'
@@ -221,6 +222,8 @@
         if (input.checked) {
           Body.setAngularVelocity(body, body.angularVelocity * 0.4);
           body.frictionAir = 0.02;
+          body.friction = 0.001;
+          body.frictionStatic = 0.0005;
         }
       });
 
