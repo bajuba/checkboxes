@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Floating Checkboxes</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --background: #0b1b2b;
+      --panel: rgba(255, 255, 255, 0.08);
+      --accent: #7ad7f0;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle at center, rgba(122, 215, 240, 0.1), transparent 45%), var(--background);
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+      min-height: 100vh;
+      color: #e9f3ff;
+    }
+
+    header {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 18px;
+      border-radius: 999px;
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 10;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+    }
+
+    header p {
+      margin: 0;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+
+    #scene {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .checkbox {
+      position: absolute;
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      transform-origin: center;
+      transition: filter 160ms ease;
+      pointer-events: auto;
+    }
+
+    .checkbox input {
+      width: 100%;
+      height: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+      filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.35));
+      transform: scale(1.05);
+    }
+
+    .checkbox input:checked {
+      filter: drop-shadow(0 10px 20px rgba(122, 215, 240, 0.5));
+    }
+
+    .checkbox:hover {
+      filter: brightness(1.1);
+    }
+
+    footer {
+      position: fixed;
+      bottom: 12px;
+      right: 16px;
+      padding: 8px 12px;
+      background: var(--panel);
+      border-radius: 10px;
+      font-size: 12px;
+      opacity: 0.8;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(10px);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Checkbox Swarm</h1>
+    <p>Uncheck chaos, check to drop</p>
+  </header>
+  <div id="scene"></div>
+  <footer>Checkboxes drift inward, collide, and drop when checked.</footer>
+
+  <script src="https://unpkg.com/matter-js@0.20.0/build/matter.min.js"></script>
+  <script>
+    const { Engine, World, Bodies, Body, Runner, Events } = Matter;
+
+    const scene = document.getElementById('scene');
+    const engine = Engine.create({ enableSleeping: false });
+    const world = engine.world;
+    world.gravity.y = 0;
+
+    const runner = Runner.create();
+
+    let viewport = { width: window.innerWidth, height: window.innerHeight };
+    const bodies = new Set();
+    const maxBoxes = 80;
+
+    function createBoundary(x, y, w, h, label) {
+      return Bodies.rectangle(x, y, w, h, { isStatic: true, label, render: { visible: false } });
+    }
+
+    const boundaries = {
+      floor: createBoundary(0, 0, 1, 1, 'floor'),
+      ceiling: createBoundary(0, 0, 1, 1, 'ceiling'),
+      left: createBoundary(0, 0, 1, 1, 'left'),
+      right: createBoundary(0, 0, 1, 1, 'right'),
+    };
+
+    function positionBoundaries() {
+      viewport = { width: window.innerWidth, height: window.innerHeight };
+      const { width: w, height: h } = viewport;
+      Body.setPosition(boundaries.floor, { x: w / 2, y: h + 30 });
+      Body.setVertices(boundaries.floor, [
+        { x: -50, y: h + 15 }, { x: w + 50, y: h + 15 }, { x: w + 50, y: h + 45 }, { x: -50, y: h + 45 }
+      ]);
+
+      Body.setPosition(boundaries.ceiling, { x: w / 2, y: -30 });
+      Body.setVertices(boundaries.ceiling, [
+        { x: -50, y: -45 }, { x: w + 50, y: -45 }, { x: w + 50, y: -15 }, { x: -50, y: -15 }
+      ]);
+
+      Body.setPosition(boundaries.left, { x: -30, y: h / 2 });
+      Body.setVertices(boundaries.left, [
+        { x: -45, y: -50 }, { x: -15, y: -50 }, { x: -15, y: h + 50 }, { x: -45, y: h + 50 }
+      ]);
+
+      Body.setPosition(boundaries.right, { x: w + 30, y: h / 2 });
+      Body.setVertices(boundaries.right, [
+        { x: w + 15, y: -50 }, { x: w + 45, y: -50 }, { x: w + 45, y: h + 50 }, { x: w + 15, y: h + 50 }
+      ]);
+    }
+
+    positionBoundaries();
+    World.add(world, Object.values(boundaries));
+
+    window.addEventListener('resize', positionBoundaries);
+
+    function randomSpawnPosition() {
+      const side = Math.floor(Math.random() * 4);
+      const padding = 80;
+      const { width: w, height: h } = viewport;
+      switch (side) {
+        case 0: return { x: -padding, y: Math.random() * h }; // left
+        case 1: return { x: w + padding, y: Math.random() * h }; // right
+        case 2: return { x: Math.random() * w, y: -padding }; // top
+        default: return { x: Math.random() * w, y: h + padding }; // bottom
+      }
+    }
+
+    function spawnCheckbox() {
+      if (bodies.size > maxBoxes) {
+        const [oldest] = bodies;
+        removeCheckbox(oldest);
+      }
+
+      const position = randomSpawnPosition();
+      const size = 34 + Math.random() * 8;
+      const element = document.createElement('label');
+      element.className = 'checkbox';
+      element.style.width = `${size}px`;
+      element.style.height = `${size}px`;
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      element.appendChild(input);
+      scene.appendChild(element);
+
+      const body = Bodies.rectangle(position.x, position.y, size, size, {
+        restitution: 0.6,
+        friction: 0.02,
+        frictionAir: 0.012,
+        chamfer: 4,
+        label: 'checkbox'
+      });
+      body.plugin = { element, input, isChecked: false, size };
+
+      const center = { x: viewport.width / 2, y: viewport.height / 2 };
+      const direction = Matter.Vector.normalise({ x: center.x - position.x, y: center.y - position.y });
+      const speed = 2 + Math.random() * 2.5;
+      Body.setVelocity(body, { x: direction.x * speed, y: direction.y * speed });
+      Body.setAngularVelocity(body, (Math.random() - 0.5) * 1.5);
+
+      input.addEventListener('change', () => {
+        body.plugin.isChecked = input.checked;
+        if (input.checked) {
+          Body.setAngularVelocity(body, body.angularVelocity * 0.4);
+          body.frictionAir = 0.02;
+        }
+      });
+
+      bodies.add(body);
+      World.add(world, body);
+    }
+
+    function removeCheckbox(body) {
+      if (!body || !body.plugin) return;
+      bodies.delete(body);
+      World.remove(world, body);
+      body.plugin.element.remove();
+    }
+
+    function applyCenterAttraction(body) {
+      const center = { x: viewport.width / 2, y: viewport.height / 2 };
+      const toCenter = Matter.Vector.sub(center, body.position);
+      const distance = Matter.Vector.magnitude(toCenter) + 0.0001;
+      const direction = Matter.Vector.mult(toCenter, 1 / distance);
+      const force = Matter.Vector.mult(direction, 0.00006 * Math.min(distance / 200, 1));
+      Body.applyForce(body, body.position, force);
+    }
+
+    Events.on(engine, 'beforeUpdate', () => {
+      bodies.forEach((body) => {
+        if (body.plugin?.isChecked) {
+          const dropForce = 0.0012 * body.mass;
+          Body.applyForce(body, body.position, { x: 0, y: dropForce });
+        } else {
+          applyCenterAttraction(body);
+        }
+      });
+    });
+
+    function syncElements() {
+      bodies.forEach((body) => {
+        const { element, size = 36 } = body.plugin;
+        const half = size / 2;
+        element.style.transform = `translate(${body.position.x - half}px, ${body.position.y - half}px) rotate(${body.angle}rad)`;
+      });
+      requestAnimationFrame(syncElements);
+    }
+
+    Runner.run(runner, engine);
+    requestAnimationFrame(syncElements);
+
+    setInterval(spawnCheckbox, 700);
+    for (let i = 0; i < 10; i++) {
+      spawnCheckbox();
+    }
+  </script>
+</body>
+</html>
