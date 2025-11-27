@@ -208,7 +208,7 @@
         chamfer: 4,
         label: 'checkbox'
       });
-      body.plugin = { element, input, isChecked: false, size };
+      body.plugin = { element, input, isChecked: false, size, defaultMask: body.collisionFilter.mask };
 
       const center = { x: viewport.width / 2, y: viewport.height / 2 };
       const direction = Matter.Vector.normalise({ x: center.x - position.x, y: center.y - position.y });
@@ -221,6 +221,10 @@
         if (input.checked) {
           Body.setAngularVelocity(body, body.angularVelocity * 0.4);
           body.frictionAir = 0.02;
+          // Let checked boxes drop straight through the scene without colliding
+          body.collisionFilter.mask = 0;
+        } else {
+          body.collisionFilter.mask = body.plugin.defaultMask;
         }
       });
 
