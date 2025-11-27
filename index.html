@@ -185,7 +185,7 @@
     }
 
     function spawnCheckbox() {
-      if (bodies.size > maxBoxes) {
+      if (bodies.size >= maxBoxes) {
         const [oldest] = bodies;
         removeCheckbox(oldest);
       }
@@ -235,6 +235,17 @@
       body.plugin.element.remove();
     }
 
+    function isOffscreen(body) {
+      const margin = 120;
+      const { x, y } = body.position;
+      return (
+        x < -margin ||
+        x > viewport.width + margin ||
+        y < -margin ||
+        y > viewport.height + margin
+      );
+    }
+
     function applyCenterAttraction(body) {
       const center = { x: viewport.width / 2, y: viewport.height / 2 };
       const toCenter = Matter.Vector.sub(center, body.position);
@@ -253,6 +264,16 @@
           applyCenterAttraction(body);
         }
       });
+    });
+
+    Events.on(engine, 'afterUpdate', () => {
+      const toRemove = [];
+      bodies.forEach((body) => {
+        if (isOffscreen(body)) {
+          toRemove.push(body);
+        }
+      });
+      toRemove.forEach(removeCheckbox);
     });
 
     function syncElements() {
