@@ -284,6 +284,30 @@
       pointer-events: auto;
     }
 
+    .checkbox.shiny {
+      filter: drop-shadow(0 0 12px rgba(255, 209, 102, 0.5)) drop-shadow(0 12px 28px rgba(0, 0, 0, 0.45));
+      animation: pulse 1800ms ease-in-out infinite;
+    }
+
+    .checkbox.shiny input {
+      transform: scale(1.2);
+    }
+
+    .checkbox.shiny .name-label {
+      color: #ffd166;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.65);
+    }
+
+    @keyframes pulse {
+      0%,
+      100% {
+        filter: drop-shadow(0 0 12px rgba(255, 209, 102, 0.55)) drop-shadow(0 12px 28px rgba(0, 0, 0, 0.45));
+      }
+      50% {
+        filter: drop-shadow(0 0 18px rgba(255, 209, 102, 0.8)) drop-shadow(0 16px 34px rgba(0, 0, 0, 0.55));
+      }
+    }
+
     .checkbox .name-label {
       position: absolute;
       top: -14px;
@@ -379,6 +403,7 @@
     let bottomLimit = viewport.height * 0.9;
     const bodies = new Set();
     let groupId = -1;
+    let lastShinyCheck = 0;
 
     function nextGroup() {
       return groupId--;
@@ -666,15 +691,15 @@
       spawnTimer = setInterval(spawnWave, settings.spawnInterval);
     }
 
-    function spawnCheckbox() {
-      const position = randomSpawnPosition();
-      const size = (34 + Math.random() * 8) * settings.sizeMultiplier;
+    function spawnCheckbox(options = {}) {
+      const position = options.position || randomSpawnPosition();
+      const size = (options.size || (34 + Math.random() * 8)) * settings.sizeMultiplier;
       const element = document.createElement('label');
       element.className = 'checkbox';
       element.style.width = `${size}px`;
       element.style.height = `${size}px`;
-      const baseColor = randomBaseColor();
-      const name = randomName();
+      const baseColor = colorKey(options.color) || randomBaseColor();
+      const name = options.name || randomName();
       element.title = name;
       element.dataset.name = name;
       const nameLabel = document.createElement('div');
@@ -682,6 +707,10 @@
       nameLabel.textContent = name;
       const input = document.createElement('input');
       input.type = 'checkbox';
+      if (options.isShiny) {
+        element.classList.add('shiny');
+        input.disabled = true;
+      }
       element.appendChild(nameLabel);
       element.appendChild(input);
       scene.appendChild(element);
@@ -708,12 +737,16 @@
         explosionStart: 0,
         lastExplosion: 0,
         lastBoost: 0,
-        canMerge: true
+        canMerge: !options.isShiny,
+        isShiny: !!options.isShiny,
+        gravityPull: options.isShiny ? 0.00016 : 0,
+        colorLocked: !!options.isShiny
       };
 
       const center = { x: viewport.width / 2, y: viewport.height / 2 };
       const direction = Vector.normalise({ x: center.x - position.x, y: center.y - position.y });
-      const speed = (2 + Math.random() * 2.5) * settings.speedMultiplier;
+      const baseSpeed = options.isShiny ? 1.2 : 2;
+      const speed = (baseSpeed + Math.random() * 2.5) * settings.speedMultiplier;
       Body.setVelocity(body, { x: direction.x * speed, y: direction.y * speed });
       Body.setAngularVelocity(body, (Math.random() - 0.5) * 1.5 * settings.spinMultiplier);
 
@@ -746,6 +779,21 @@
       Body.applyForce(body, body.position, force);
     }
 
+    function applyShinyGravity(body, wells) {
+      if (!wells.length || !body?.position || body.plugin?.isShiny) return;
+      wells.forEach((well) => {
+        if (!well?.position) return;
+        const delta = Vector.sub(well.position, body.position);
+        const distance = Math.max(Vector.magnitude(delta), 40);
+        const strength = well.plugin?.gravityPull || 0;
+        if (!strength) return;
+        const direction = Vector.mult(delta, 1 / distance);
+        const falloff = Math.min(1 / Math.pow(distance / 120, 2), 0.25);
+        const force = Vector.mult(direction, strength * body.mass * falloff);
+        Body.applyForce(body, body.position, force);
+      });
+    }
+
     function updateColor(body, color) {
       const plugin = body.plugin;
       if (!plugin) return;
@@ -754,7 +802,7 @@
       if (!normalized) return;
       if (plugin.isChecked && normalized !== plugin.color) return;
       if (plugin.color === RED && normalized !== RED) return;
-      if (plugin.colorLocked && normalized !== RED) return;
+      if (plugin.colorLocked && normalized !== RED && plugin.color) return;
       plugin.color = normalized;
       plugin.input.style.accentColor = normalized;
     }
@@ -776,6 +824,45 @@
         body.plugin.element.remove();
       }
       World.remove(world, body);
+    }
+
+    function findDenseCluster() {
+      const candidates = Array.from(bodies).filter((body) => body.plugin && !body.plugin.isChecked && !body.plugin.isShiny);
+      const radius = 90;
+      const minCount = 10;
+      for (const seed of candidates) {
+        const cluster = candidates.filter((other) => Vector.magnitude(Vector.sub(other.position, seed.position)) <= radius);
+        if (cluster.length < minCount) continue;
+        const bounds = cluster.reduce((acc, body) => ({
+          minX: Math.min(acc.minX, body.bounds.min.x),
+          minY: Math.min(acc.minY, body.bounds.min.y),
+          maxX: Math.max(acc.maxX, body.bounds.max.x),
+          maxY: Math.max(acc.maxY, body.bounds.max.y)
+        }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+        const width = bounds.maxX - bounds.minX;
+        const height = bounds.maxY - bounds.minY;
+        if (width <= 220 && height <= 220) {
+          return cluster;
+        }
+      }
+      return null;
+    }
+
+    function mergeIntoShiny(cluster) {
+      if (!cluster?.length) return;
+      const center = cluster.reduce((acc, body) => ({ x: acc.x + body.position.x, y: acc.y + body.position.y }), { x: 0, y: 0 });
+      center.x /= cluster.length;
+      center.y /= cluster.length;
+      cluster.forEach((body) => removeBody(body, { skipStamp: true }));
+      spawnCheckbox({ position: center, size: 68, color: '#ffd166', name: 'Shiny Merge', isShiny: true });
+    }
+
+    function checkForShinyMerge() {
+      const now = performance.now();
+      if (now - lastShinyCheck < 600) return;
+      lastShinyCheck = now;
+      const cluster = findDenseCluster();
+      if (cluster) mergeIntoShiny(cluster);
     }
 
     function stampEmoji(body) {
@@ -1084,6 +1171,7 @@
     }
 
     Events.on(engine, 'beforeUpdate', () => {
+      const shinyWells = Array.from(bodies).filter((body) => body.plugin?.isShiny);
       bodies.forEach((body) => {
         if (body.plugin && (body.position.y < topLimit || body.position.y > bottomLimit)) {
           removeBody(body);
@@ -1094,6 +1182,8 @@
           limitSpeed(body);
           return;
         }
+
+        applyShinyGravity(body, shinyWells);
 
         const boosted = triggerOverdrive(body);
         if (boosted) {
@@ -1397,6 +1487,7 @@
     }
 
     Events.on(engine, 'afterUpdate', () => {
+      checkForShinyMerge();
       scanCheckedMerges();
     });
 
