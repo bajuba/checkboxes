@@ -103,6 +103,124 @@
       color: rgba(233, 243, 255, 0.85);
     }
 
+    #shop-panel {
+      position: fixed;
+      right: 16px;
+      top: 86px;
+      width: 260px;
+      padding: 12px;
+      border-radius: 14px;
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(14px);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 6;
+      color: #e9f3ff;
+    }
+
+    .shop-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .shop-title {
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      font-size: 15px;
+    }
+
+    .shop-subtitle {
+      font-size: 12px;
+      opacity: 0.78;
+    }
+
+    .shop-points {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 6px 10px;
+      border-radius: 10px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      min-width: 70px;
+      text-align: right;
+    }
+
+    .shop-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    .shop-row select {
+      flex: 1;
+      padding: 6px 8px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(0, 0, 0, 0.35);
+      color: #e9f3ff;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    }
+
+    .shop-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .shop-action {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
+    }
+
+    .shop-action .label {
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .shop-action .hint {
+      font-size: 12px;
+      opacity: 0.8;
+      margin-top: 2px;
+    }
+
+    .shop-action button {
+      align-self: center;
+      padding: 6px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: linear-gradient(135deg, rgba(122, 215, 240, 0.18), rgba(255, 255, 255, 0.08));
+      color: #e9f3ff;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
+      transition: transform 120ms ease, filter 120ms ease;
+    }
+
+    .shop-action button:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.08);
+    }
+
+    .shop-action button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      filter: grayscale(0.3);
+    }
+
     .pip-row {
       display: flex;
       align-items: center;
@@ -227,6 +345,20 @@
   <div id="emoji-field" aria-hidden="true"></div>
   <div id="scene"></div>
   <div id="pip-panel" aria-hidden="true"></div>
+  <div id="shop-panel">
+    <div class="shop-header">
+      <div>
+        <div class="shop-title">Color Workshop</div>
+        <div class="shop-subtitle">Spend pips to tune the chaos</div>
+      </div>
+      <div class="shop-points" id="shop-points">0 pts</div>
+    </div>
+    <div class="shop-row">
+      <label for="color-select">Spend color</label>
+      <select id="color-select"></select>
+    </div>
+    <div class="shop-actions" id="shop-actions"></div>
+  </div>
   <div id="guide-top" class="guide-line"></div>
   <div id="guide-bottom" class="guide-line"></div>
   <footer>Checkboxes drift inward, collide, and drop when checked.</footer>
@@ -271,6 +403,77 @@
       '#ff66ff': 'Magenta',
       '#66e6ff': 'Cyan'
     };
+
+    const LEVEL_WEIGHTS = [1, 10, 100, 1000, 10000, 100000, 1000000];
+    const spentPoints = new Map();
+    const shopSelect = document.getElementById('color-select');
+    const shopPoints = document.getElementById('shop-points');
+    const shopActions = document.getElementById('shop-actions');
+
+    const settings = {
+      spawnInterval: 700,
+      spawnBurst: 1,
+      speedMultiplier: 1,
+      spinMultiplier: 1,
+      sizeMultiplier: 1,
+      explosionMultiplier: 1,
+    };
+
+    const upgrades = [
+      {
+        key: 'spawnBurst',
+        label: 'More checkboxes',
+        hint: () => `Spawn ${settings.spawnBurst} → ${settings.spawnBurst + 1} per wave`,
+        cost: 30,
+        apply: () => { settings.spawnBurst = Math.min(settings.spawnBurst + 1, 6); resetSpawner(); },
+        canApply: () => settings.spawnBurst < 6,
+      },
+      {
+        key: 'spawnInterval',
+        label: 'Faster waves',
+        hint: () => `Interval ${Math.round(settings.spawnInterval)}ms → ${Math.max(240, Math.round(settings.spawnInterval * 0.9))}ms`,
+        cost: 25,
+        apply: () => { settings.spawnInterval = Math.max(240, settings.spawnInterval * 0.9); resetSpawner(); },
+        canApply: () => settings.spawnInterval > 250,
+      },
+      {
+        key: 'speedMultiplier',
+        label: 'Drift speed',
+        hint: () => `Speed x${settings.speedMultiplier.toFixed(2)} → x${(settings.speedMultiplier + 0.15).toFixed(2)}`,
+        cost: 20,
+        apply: () => { settings.speedMultiplier += 0.15; },
+        canApply: () => settings.speedMultiplier < 2.5,
+      },
+      {
+        key: 'spinMultiplier',
+        label: 'Spin rate',
+        hint: () => `Spin x${settings.spinMultiplier.toFixed(2)} → x${(settings.spinMultiplier + 0.15).toFixed(2)}`,
+        cost: 18,
+        apply: () => { settings.spinMultiplier += 0.15; },
+        canApply: () => settings.spinMultiplier < 2.5,
+      },
+      {
+        key: 'sizeMultiplier',
+        label: 'Chunky boxes',
+        hint: () => `Size x${settings.sizeMultiplier.toFixed(2)} → x${(settings.sizeMultiplier + 0.1).toFixed(2)}`,
+        cost: 22,
+        apply: () => { settings.sizeMultiplier = Math.min(settings.sizeMultiplier + 0.1, 2.2); },
+        canApply: () => settings.sizeMultiplier < 2.2,
+      },
+      {
+        key: 'explosionMultiplier',
+        label: 'Bigger booms',
+        hint: () => `Blast x${settings.explosionMultiplier.toFixed(2)} → x${(settings.explosionMultiplier + 0.2).toFixed(2)}`,
+        cost: 28,
+        apply: () => { settings.explosionMultiplier = Math.min(settings.explosionMultiplier + 0.2, 3); },
+        canApply: () => settings.explosionMultiplier < 3,
+      },
+    ];
+
+    if (shopSelect) {
+      shopSelect.addEventListener('change', refreshShop);
+    }
+    refreshShop();
 
     const PRIMARY_COLORS = new Set(['#7ad7f0', '#52ff8f', '#ff4d4f']);
     const BASE_COLORS = ['#7ad7f0']; // normal blue spawn
@@ -367,6 +570,18 @@
       return pipState.get(key);
     }
 
+    function totalPoints(color) {
+      const state = ensurePipState(color);
+      return state.levels.reduce((sum, count, level) => sum + count * (LEVEL_WEIGHTS[level] || 0), 0);
+    }
+
+    function availablePoints(color) {
+      const key = colorKey(color);
+      const total = totalPoints(key);
+      const spent = spentPoints.get(key) || 0;
+      return Math.max(0, total - spent);
+    }
+
     function blendColors(a, b) {
       const key = blendKey(a, b);
       if (!key.trim()) return null;
@@ -438,9 +653,22 @@
       }
     }
 
+    let spawnTimer = null;
+
+    function spawnWave() {
+      for (let i = 0; i < settings.spawnBurst; i++) {
+        spawnCheckbox();
+      }
+    }
+
+    function resetSpawner() {
+      if (spawnTimer) clearInterval(spawnTimer);
+      spawnTimer = setInterval(spawnWave, settings.spawnInterval);
+    }
+
     function spawnCheckbox() {
       const position = randomSpawnPosition();
-      const size = 34 + Math.random() * 8;
+      const size = (34 + Math.random() * 8) * settings.sizeMultiplier;
       const element = document.createElement('label');
       element.className = 'checkbox';
       element.style.width = `${size}px`;
@@ -485,9 +713,9 @@
 
       const center = { x: viewport.width / 2, y: viewport.height / 2 };
       const direction = Vector.normalise({ x: center.x - position.x, y: center.y - position.y });
-      const speed = 2 + Math.random() * 2.5;
+      const speed = (2 + Math.random() * 2.5) * settings.speedMultiplier;
       Body.setVelocity(body, { x: direction.x * speed, y: direction.y * speed });
-      Body.setAngularVelocity(body, (Math.random() - 0.5) * 1.5);
+      Body.setAngularVelocity(body, (Math.random() - 0.5) * 1.5 * settings.spinMultiplier);
 
       input.addEventListener('change', () => {
         // Lock once checked; disallow unchecking.
@@ -604,6 +832,92 @@
           addLevel(level + 1);
         }
       }
+
+      refreshShop();
+    }
+
+    function refreshShopOptions() {
+      if (!shopSelect) return;
+      const knownColors = Array.from(pipState.keys());
+      const options = knownColors.filter((c) => availablePoints(c) > 0);
+      const existing = new Set(options);
+      Array.from(shopSelect.options).forEach((opt) => {
+        if (!existing.has(opt.value)) opt.remove();
+      });
+
+      options.forEach((color) => {
+        const found = Array.from(shopSelect.options).find((o) => o.value === color);
+        if (found) {
+          found.textContent = `${colorLabels[color] || 'Color'} (${availablePoints(color)} pts)`;
+          return;
+        }
+        const opt = document.createElement('option');
+        opt.value = color;
+        opt.textContent = `${colorLabels[color] || 'Color'} (${availablePoints(color)} pts)`;
+        opt.style.color = color;
+        shopSelect.appendChild(opt);
+      });
+
+      if (!shopSelect.value && shopSelect.options.length) {
+        shopSelect.value = shopSelect.options[0].value;
+      }
+    }
+
+    function refreshShopActions() {
+      if (!shopActions) return;
+      shopActions.innerHTML = '';
+      upgrades.forEach((upgrade) => {
+        const row = document.createElement('div');
+        row.className = 'shop-action';
+
+        const copy = document.createElement('div');
+        copy.innerHTML = `<div class="label">${upgrade.label}</div><div class="hint">${upgrade.hint()}</div>`;
+
+        const button = document.createElement('button');
+        button.textContent = `${upgrade.cost} pts`;
+        button.addEventListener('click', () => {
+          const color = shopSelect?.value;
+          if (!color) return;
+          if (availablePoints(color) < upgrade.cost) return;
+          if (!upgrade.canApply()) return;
+          spentPoints.set(colorKey(color), (spentPoints.get(colorKey(color)) || 0) + upgrade.cost);
+          upgrade.apply();
+          refreshShop();
+        });
+
+        row.appendChild(copy);
+        row.appendChild(button);
+        shopActions.appendChild(row);
+      });
+    }
+
+    function refreshShopPoints() {
+      if (!shopPoints) return;
+      const color = shopSelect?.value;
+      const current = color ? availablePoints(color) : 0;
+      shopPoints.textContent = `${current} pts`;
+      if (color && shopSelect) {
+        const option = Array.from(shopSelect.options).find((o) => o.value === color);
+        if (option) option.textContent = `${colorLabels[color] || 'Color'} (${availablePoints(color)} pts)`;
+      }
+    }
+
+    function refreshShop() {
+      refreshShopOptions();
+      refreshShopActions();
+      refreshShopPoints();
+      if (shopActions) {
+        Array.from(shopActions.children).forEach((row, idx) => {
+          const button = row.querySelector('button');
+          const upgrade = upgrades[idx];
+          if (button && upgrade) {
+            const color = shopSelect?.value;
+            const enough = color ? availablePoints(color) >= upgrade.cost : false;
+            button.disabled = !enough || !upgrade.canApply();
+            button.textContent = upgrade.canApply() ? `${upgrade.cost} pts` : 'Maxed';
+          }
+        });
+      }
     }
 
     function mergeBodies(a, b) {
@@ -715,8 +1029,8 @@
 
     function limitSpeed(body) {
       if (body.isStatic) return;
-      const maxSpeed = 8;
-      const maxSpin = 1.8;
+      const maxSpeed = 8 * settings.speedMultiplier;
+      const maxSpin = 1.8 * settings.spinMultiplier;
       const speed = Vector.magnitude(body.velocity);
       if (speed > maxSpeed) {
         Body.setVelocity(body, Vector.mult(Vector.normalise(body.velocity), maxSpeed));
@@ -753,7 +1067,7 @@
     function shrinkIfSpinningFast(body) {
       if (!body.plugin || body.isStatic || body.plugin.isFrozen || body.plugin.isExploding || body.plugin.isChecked) return false;
       const spin = Math.abs(body.angularVelocity);
-      const threshold = 2.4;
+      const threshold = 2.4 * settings.spinMultiplier;
       if (spin <= threshold) return false;
       const factor = 0.985;
       const newSize = body.plugin.size * factor;
@@ -916,7 +1230,7 @@
       }
 
       const origin = body.position;
-      const blast = 0.08;
+      const blast = 0.08 * settings.explosionMultiplier;
 
       neighbors.forEach((other) => {
         if (!other?.position) return;
@@ -1102,10 +1416,11 @@
     Runner.run(runner, engine);
     requestAnimationFrame(syncElements);
 
-    setInterval(spawnCheckbox, 700);
+    resetSpawner();
     for (let i = 0; i < 10; i++) {
       spawnCheckbox();
     }
+    spawnWave();
   </script>
 </body>
 </html>
